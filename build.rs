@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 use std::fs;
+use std::env;
 use std::io::Write;
 use std::process::Command;
+use bindgen::builder;
 
 fn main() {
     // Create a directory for Musashi in the target directory
@@ -71,6 +73,21 @@ fn main() {
         .define("OPTIMIZE_FOR_SIZE", None)
         .define("M68K_EMULATE_FPU", Some("0"))
         .compile("musashi");
+
+    let bindings = builder()
+        .header(musashi_dir.join("m68k.h").to_str().expect("Invalid path"))
+        .blocklist_function("m68k_read_memory_.*")
+        .blocklist_function("m68k_write_memory_.*")
+        .generate()
+        .expect("Unable to generate bindings");
+
+    // bindings
+    //     .write_to_file(musashi_dir.join("bindings.rs").to_str().expect("Invalid path"))
+    //     .expect("Couldn't write bindings!");
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
 
     println!("cargo:rerun-if-changed=build.rs");
 }
