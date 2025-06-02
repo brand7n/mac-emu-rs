@@ -7,6 +7,8 @@ extern "C" {
     fn m68k_set_cpu_type(type_: i32);
     fn m68k_pulse_reset();
     fn m68k_execute(cycles: i32) -> i32;
+    fn m68k_set_reg(reg: i32, value: u32);
+    fn m68k_get_reg(reg: i32) -> u32;
 }
 
 #[no_mangle]
@@ -38,12 +40,24 @@ pub extern "C" fn m68k_write_memory_32(address: u32, value: u32) {
 
 pub fn init_cpu() {
     unsafe {
+        println!("Initializing CPU...");
         m68k_init();
+        println!("CPU initialized.");
         m68k_set_cpu_type(CPU_TYPE_68000);
+        println!("CPU type set.");
         m68k_pulse_reset();
+        println!("CPU reset complete.");
     }
 }
 
 pub fn step(cycles: i32) -> i32 {
     unsafe { m68k_execute(cycles) }
+}
+
+pub fn get_reg(reg: i32) -> u32 {
+    unsafe { m68k_get_reg(reg) }
+}
+
+pub fn set_reg(reg: i32, value: u32) {
+    unsafe { m68k_set_reg(reg, value) }
 }

@@ -19,9 +19,27 @@ pub static mut ROM: [u8; ROM_SIZE] = [0; ROM_SIZE];
 pub fn read_u8(addr: u32) -> u8 {
     unsafe {
         match addr {
-            0x000000..=0x01FFFF => RAM[addr as usize],
-            0x400000..=0x40FFFF => ROM[(addr - 0x400000) as usize],
-            _ => 0xFF,
+            0x000000..=0x01FFFF => {
+                if addr as usize >= RAM_SIZE {
+                    println!("WARNING: read_u8 out of bounds: 0x{:X}", addr);
+                    0xFF
+                } else {
+                    RAM[addr as usize]
+                }
+            },
+            0x400000..=0x40FFFF => {
+                let rom_addr = (addr - 0x400000) as usize;
+                if rom_addr >= ROM_SIZE {
+                    println!("WARNING: read_u8 ROM out of bounds: 0x{:X}", addr);
+                    0xFF
+                } else {
+                    ROM[rom_addr]
+                }
+            },
+            _ => {
+                println!("WARNING: read_u8 unmapped address: 0x{:X}", addr);
+                0xFF
+            },
         }
     }
 }
@@ -35,7 +53,13 @@ pub fn read_u16(addr: u32) -> u16 {
 pub fn write_u8(addr: u32, value: u8) {
     unsafe {
         if (0x000000..=0x01FFFF).contains(&addr) {
-            RAM[addr as usize] = value;
+            if addr as usize >= RAM_SIZE {
+                println!("WARNING: write_u8 out of bounds: 0x{:X}", addr);
+            } else {
+                RAM[addr as usize] = value;
+            }
+        } else {
+            println!("WARNING: write_u8 unmapped address: 0x{:X}", addr);
         }
     }
 }
