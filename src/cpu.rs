@@ -7,8 +7,9 @@ extern "C" {
     fn m68k_set_cpu_type(type_: i32);
     fn m68k_pulse_reset();
     fn m68k_execute(cycles: i32) -> i32;
-    fn m68k_set_reg(reg: i32, value: u32);
-    fn m68k_get_reg(reg: i32) -> u32;
+    //fn m68k_set_reg(reg: i32, value: u32);
+    fn m68k_get_reg(context: *const std::ffi::c_void, reg: i32) -> u32;
+
 }
 
 #[no_mangle]
@@ -55,9 +56,9 @@ pub fn step(cycles: i32) -> i32 {
 }
 
 pub fn get_reg(reg: i32) -> u32 {
-    unsafe { m68k_get_reg(reg) }
+    unsafe { m68k_get_reg(std::ptr::null(), reg) }
 }
 
-pub fn set_reg(reg: i32, value: u32) {
-    unsafe { m68k_set_reg(reg, value) }
-}
+// pub fn set_reg(reg: i32, value: u32) {
+//     //unsafe { m68k_set_reg(reg, value) }
+// }

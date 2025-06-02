@@ -17,6 +17,7 @@ pub static mut ROM: [u8; ROM_SIZE] = [0; ROM_SIZE];
 // }
 
 pub fn read_u8(addr: u32) -> u8 {
+    println!("read_u8: 0x{:X}", addr);
     unsafe {
         match addr {
             0x000000..=0x01FFFF => {
@@ -45,6 +46,7 @@ pub fn read_u8(addr: u32) -> u8 {
 }
 
 pub fn read_u16(addr: u32) -> u16 {
+    println!("read_u16: 0x{:X}", addr);
     let high = read_u8(addr) as u16;
     let low = read_u8(addr + 1) as u16;
     (high << 8) | low
@@ -65,6 +67,7 @@ pub fn write_u8(addr: u32, value: u8) {
 }
 
 pub fn read_u32(addr: u32) -> u32 {
+    println!("read_u32: 0x{:X}", addr);
     let high = read_u16(addr) as u32;
     let low = read_u16(addr + 2) as u32;
     (high << 16) | low

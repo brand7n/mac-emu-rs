@@ -16,10 +16,10 @@ fn main() {
     // Vector 1: Initial PC (our test instruction)
     write_u32(0x000004, 0x1000);
 
-    // Write test instruction MOVE.W #$1234,D0 at address 0x1000
-    // MOVE.W #$1234,D0 = 0x303C 0x1234
-    write_u16(0x1000, 0x303C);  // MOVE.W #imm,D0
-    write_u16(0x1002, 0x1234);  // Immediate value
+    // Set up test loop
+    write_u16(0x1000, 0x7042);  // $42 -> D0
+    write_u16(0x1002, 0x4ef8);  // JMP $1000
+    write_u16(0x1004, 0x1000);
 
     // Initialize CPU (will read vectors from 0x000000 and 0x000004)
     init_cpu();
