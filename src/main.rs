@@ -47,7 +47,15 @@ fn main() {
     
     // Run the video event loop, which calls the CPU execution step
     video.run(event_loop, || {
-        let cycles = step(CYCLES_PER_BATCH);
-        info!("Cycles executed: {}", cycles);
+        let start_time = Instant::now();
+        let mut total_cycles = 0;
+        
+        // Execute cycles in batches until we're close to using up our frame time
+        while start_time.elapsed() < FRAME_TIME {
+            let cycles = step(CYCLES_PER_BATCH);
+            total_cycles += cycles;
+        }
+        
+        info!("Total cycles executed this frame: {}", total_cycles);
     });
 }
