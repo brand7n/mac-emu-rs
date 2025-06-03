@@ -32,7 +32,31 @@ impl MacVideo {
         (MacVideo { pixels, window }, event_loop)
     }
 
-    pub fn run(mut self, event_loop: EventLoop<()>) {
+    pub fn update(&mut self) {
+        let frame = self.pixels.frame_mut();
+
+        unsafe {
+            for y in 0..HEIGHT as usize {
+                for x in 0..WIDTH as usize {
+                    let offset = (y * (WIDTH as usize / 8)) + (x / 8);
+                    let byte = RAM.get(VIDEO_BASE + offset).copied().unwrap_or(0);
+                    let bit = 7 - (x % 8);
+                    let pixel_on = (byte >> bit) & 1 != 0;
+
+                    let idx = (y * WIDTH as usize + x) * 4;
+                    let color = if pixel_on { 0x00 } else { 0xFF };
+                    frame[idx..idx + 4].copy_from_slice(&[color, color, color, 0xFF]);
+                }
+            }
+        }
+
+        self.pixels.render().unwrap();
+    }
+
+    pub fn run<F>(mut self, event_loop: EventLoop<()>, mut emulation_step: F)
+    where
+        F: FnMut() + 'static,
+    {
         event_loop.run(move |event, _, control_flow| {
             match event {
                 Event::WindowEvent { event, .. } => match event {
@@ -45,24 +69,8 @@ impl MacVideo {
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
-                    let frame = self.pixels.frame_mut();
-
-                    unsafe {
-                        for y in 0..HEIGHT as usize {
-                            for x in 0..WIDTH as usize {
-                                let offset = (y * (WIDTH as usize / 8)) + (x / 8);
-                                let byte = RAM.get(VIDEO_BASE + offset).copied().unwrap_or(0);
-                                let bit = 7 - (x % 8);
-                                let pixel_on = (byte >> bit) & 1 != 0;
-
-                                let idx = (y * WIDTH as usize + x) * 4;
-                                let color = if pixel_on { 0x00 } else { 0xFF };
-                                frame[idx..idx + 4].copy_from_slice(&[color, color, color, 0xFF]);
-                            }
-                        }
-                    }
-
-                    self.pixels.render().unwrap();
+                    emulation_step();
+                    self.update();
                 }
                 Event::MainEventsCleared => {
                     self.window.request_redraw();

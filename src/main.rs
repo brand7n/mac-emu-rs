@@ -2,9 +2,14 @@ mod cpu;
 mod memory;
 mod video;
 
-use cpu::{init_cpu, step, get_reg};
-use memory::{RAM, VIDEO_BASE, write_u16, write_u32, RAM_SIZE};
+use cpu::{init_cpu, step};
+use memory::{write_u16, write_u32, RAM_SIZE};
 use video::MacVideo;
+use std::time::{Duration, Instant};
+
+const CYCLES_PER_BATCH: i32 = 128;
+const TARGET_FPS: u32 = 60;
+const FRAME_TIME: Duration = Duration::from_micros(1_000_000 / TARGET_FPS as u64);
 
 //#[tokio::main]
 fn main() {
@@ -24,29 +29,37 @@ fn main() {
     // Initialize CPU (will read vectors from 0x000000 and 0x000004)
     init_cpu();
 
-    // Print PC before stepping
-    let pc_before = get_reg(16); // Register 16 is PC
-    println!("PC before step: 0x{:X}", pc_before);
-
-    // Step through the instruction (give plenty of cycles)
-    let cycles = step(100);
-    println!("Executed instruction, used {} cycles", cycles);
-
-    // Print PC after stepping
-    let pc_after = get_reg(16);
-    println!("PC after step: 0x{:X}", pc_after);
-
-    // Check D0's value
-    let d0_value = get_reg(0);  // Register 0 is D0
-    println!("D0 = 0x{:X}", d0_value);
-
-    // Test pattern
-    unsafe {
-        for i in 0..(512 * 342 / 8) {
-            RAM[VIDEO_BASE + i] = if i % 2 == 0 { 0xAA } else { 0x55 };
-        }
-    }
-
+    // Initialize video
     let (video, event_loop) = MacVideo::new();
-    video.run(event_loop);
+    
+    // Run the video event loop with our emulation logic
+    video.run(event_loop, || {
+        let mut total_cycles = 0;
+        let frame_start = Instant::now();
+        
+        // Process cycles in batches
+        for _ in 0..(TARGET_FPS as i32 * CYCLES_PER_BATCH) {
+            let cycles = step(CYCLES_PER_BATCH);
+            total_cycles += cycles;
+        }
+        
+        // Calculate time to wait for next frame
+        let elapsed = frame_start.elapsed();
+        if elapsed < FRAME_TIME {
+            std::thread::sleep(FRAME_TIME - elapsed);
+        }
+        
+        // Optional: Print some debug info every second
+        static mut LAST_FRAME_TIME: Option<Instant> = None;
+        unsafe {
+            if let Some(last_time) = LAST_FRAME_TIME {
+                if frame_start.duration_since(last_time) >= Duration::from_secs(1) {
+                    println!("Cycles per second: {}", total_cycles);
+                    LAST_FRAME_TIME = Some(frame_start);
+                }
+            } else {
+                LAST_FRAME_TIME = Some(frame_start);
+            }
+        }
+    });
 }
