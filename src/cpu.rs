@@ -1,4 +1,5 @@
 use crate::memory::{read_u8, read_u16, write_u8, write_u16, read_u32, write_u32};
+use log::info;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -29,15 +30,15 @@ pub extern "C" fn m68k_write_memory_32(address: u32, value: u32) {
     write_u32(address, value)
 }
 
-pub fn init_cpu() {
+pub fn init() {
+    info!("Initializing CPU...");
     unsafe {
-        println!("Initializing CPU...");
         m68k_init();
-        println!("CPU initialized.");
+        info!("CPU initialized.");
         m68k_set_cpu_type(M68K_CPU_TYPE_68000);
-        println!("CPU type set.");
+        info!("CPU type set.");
         m68k_pulse_reset();
-        println!("CPU reset complete.");
+        info!("CPU reset complete.");
     }
 }
 
