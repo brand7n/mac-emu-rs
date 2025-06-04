@@ -7,10 +7,13 @@ use crate::cpu::{get_pc, disassemble_instruction};
 use crate::iwm::Iwm;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 lazy_static! {
     static ref IWM_INSTANCE: Mutex<Iwm> = Mutex::new(Iwm::new());
 }
+
+pub(crate) static SINGLE_STEP: AtomicBool = AtomicBool::new(false);
 
 // TODO: mac plus rom maps over our VIDEO_BASE
 pub const RAM_SIZE: usize = 0x1000000;
@@ -44,31 +47,50 @@ pub fn remap_rom() {
     }
 }
 
-fn wait_for_keypress_hw(label: &str, addr: u32) {
+pub(crate) fn wait_for_keypress_hw(label: &str, addr: u32) -> bool {
     let pc = get_pc();
     let disasm = disassemble_instruction(pc);
-    println!("{} at 0x{:X}\n  PC: 0x{:08X}  {}\nPress Enter to continue...", label, addr, pc, disasm);
+    crate::cpu::display_registers();
+    println!("{} at 0x{:X}\n  PC: 0x{:08X}  {}\nPress Enter to continue, or 's' then Enter to single-step...", label, addr, pc, disasm);
     io::stdout().flush().unwrap();
-    let _ = io::stdin().read_line(&mut String::new());
+    let mut input = String::new();
+    let _ = io::stdin().read_line(&mut input);
+    if input.trim() == "s" {
+        SINGLE_STEP.store(true, Ordering::SeqCst);
+        false
+    } else {
+        SINGLE_STEP.store(false, Ordering::SeqCst);
+        true
+    }
 }
 
 pub fn read_u8(addr: u32) -> u8 {
     // IWM: ((addr & 0xFFFFFF) >= 0xDFE1FF) && ((addr & 0xFFFFFF) < 0xE001FF)
     if (addr & 0xFFFFFF) >= 0xDFE1FF && (addr & 0xFFFFFF) < (0xDFE1FF + 0x2000) {
         log::warn!("IWM hardware read at 0x{:X}", addr);
-        wait_for_keypress_hw("IWM hardware read", addr);
+        let cont = wait_for_keypress_hw("IWM hardware read", addr);
+        if !cont {
+            // single-step mode: pause after this instruction
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
         let iwm = IWM_INSTANCE.lock().unwrap();
         return iwm.read(addr);
     }
     // SCC_RD: ((addr & 0xF00000) == 0x900000)
     if (addr & 0xF00000) == 0x900000 {
         log::warn!("SCC_RD hardware read at 0x{:X}", addr);
-        wait_for_keypress_hw("SCC_RD hardware read", addr);
+        let cont = wait_for_keypress_hw("SCC_RD hardware read", addr);
+        if !cont {
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
     }
     // SCC_WR: ((addr & 0xF00000) == 0xB00000)
     if (addr & 0xF00000) == 0xB00000 {
         log::warn!("SCC_WR hardware read at 0x{:X}", addr);
-        wait_for_keypress_hw("SCC_WR hardware read", addr);
+        let cont = wait_for_keypress_hw("SCC_WR hardware read", addr);
+        if !cont {
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
     }
     if (addr & 0xE80000) == 0xE80000 {
         let mut via_lock = VIA.lock().unwrap();
@@ -81,13 +103,10 @@ pub fn read_u8(addr: u32) -> u8 {
     }
     unsafe {
         if ROM_MAPPED_AT_ZERO && addr < ROM_SIZE as u32 {
-            //info!("read_u8 (ROM@0): 0x{:X}", addr);
             ROM[addr as usize]
         } else if addr >= ROM_BASE && addr < ROM_BASE + ROM_SIZE as u32 {
-            //info!("read_u8 (ROM@400000): 0x{:X}", addr);
             ROM[(addr - ROM_BASE) as usize]
         } else if addr < RAM_SIZE as u32 {
-            //info!("read_u8 (RAM): 0x{:X}", addr);
             RAM[addr as usize]
         } else {
             warn!("read_u8 unmapped address: 0x{:X}", addr);
@@ -100,7 +119,10 @@ pub fn write_u8(addr: u32, value: u8) {
     // IWM: ((addr & 0xFFFFFF) >= 0xDFE1FF) && ((addr & 0xFFFFFF) < 0xE001FF)
     if (addr & 0xFFFFFF) >= 0xDFE1FF && (addr & 0xFFFFFF) < (0xDFE1FF + 0x2000) {
         log::warn!("IWM hardware write at 0x{:X} = 0x{:X}", addr, value);
-        wait_for_keypress_hw("IWM hardware write", addr);
+        let cont = wait_for_keypress_hw("IWM hardware write", addr);
+        if !cont {
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
         let mut iwm = IWM_INSTANCE.lock().unwrap();
         iwm.write(addr, value);
         return;
@@ -108,12 +130,18 @@ pub fn write_u8(addr: u32, value: u8) {
     // SCC_RD: ((addr & 0xF00000) == 0x900000)
     if (addr & 0xF00000) == 0x900000 {
         log::warn!("SCC_RD hardware write at 0x{:X} = 0x{:X}", addr, value);
-        wait_for_keypress_hw("SCC_RD hardware write", addr);
+        let cont = wait_for_keypress_hw("SCC_RD hardware write", addr);
+        if !cont {
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
     }
     // SCC_WR: ((addr & 0xF00000) == 0xB00000)
     if (addr & 0xF00000) == 0xB00000 {
         log::warn!("SCC_WR hardware write at 0x{:X} = 0x{:X}", addr, value);
-        wait_for_keypress_hw("SCC_WR hardware write", addr);
+        let cont = wait_for_keypress_hw("SCC_WR hardware write", addr);
+        if !cont {
+            SINGLE_STEP.store(true, Ordering::SeqCst);
+        }
     }
     if (addr & 0xE80000) == 0xE80000 {
         let mut via_lock = VIA.lock().unwrap();
@@ -126,8 +154,10 @@ pub fn write_u8(addr: u32, value: u8) {
     }
     unsafe {
         if ROM_MAPPED_AT_ZERO && addr < ROM_SIZE as u32 {
+            let _ = wait_for_keypress_hw("write_u8 attempt to write to ROM@0", addr);
             warn!("write_u8 attempt to write to ROM@0: 0x{:X}", addr);
         } else if addr >= ROM_BASE && addr < ROM_BASE + ROM_SIZE as u32 {
+            let _ = wait_for_keypress_hw("write_u8 attempt to write to ROM@400000", addr);
             warn!("write_u8 attempt to write to ROM@400000: 0x{:X}", addr);
         } else if addr < RAM_SIZE as u32 {
             info!("write_u8 (RAM): 0x{:X} = 0x{:X}", addr, value);

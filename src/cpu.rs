@@ -1,6 +1,7 @@
 use crate::memory::{read_u8, read_u16, write_u8, write_u16, read_u32, write_u32};
 use log::info;
 use std::ffi::CStr;
+use std::sync::atomic::Ordering;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -58,12 +59,22 @@ pub fn init() {
 }
 
 pub fn step(cycles: i32) -> i32 {
-    unsafe { 
-        //info!("About to execute {} cycles", cycles);
-        let cycles_executed = m68k_execute(cycles);
-        //info!("Executed {} cycles", cycles_executed);
-        cycles_executed
+    use crate::memory::{SINGLE_STEP, wait_for_keypress_hw};
+    let mut cycles_left = cycles;
+    let mut total_cycles = 0;
+    while cycles_left > 0 {
+        if SINGLE_STEP.load(Ordering::SeqCst) {
+            let pc = get_pc();
+            let _ = wait_for_keypress_hw("Single-step", pc);
+        }
+        let executed = unsafe { m68k_execute(1) };
+        if executed <= 0 {
+            break;
+        }
+        cycles_left -= executed;
+        total_cycles += executed;
     }
+    total_cycles
 }
 
 pub fn get_reg(reg: m68k_register_t) -> u32 {

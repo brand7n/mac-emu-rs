@@ -13,7 +13,7 @@ use std::env;
 use log::{info, error};
 use std::io::{self, Write};
 
-const CYCLES_PER_BATCH: i32 = 1024;
+const CYCLES_PER_BATCH: i32 = 10240;
 const TARGET_FPS: u32 = 60;
 const FRAME_TIME: Duration = Duration::from_micros(1_000_000 / TARGET_FPS as u64);
 
@@ -59,6 +59,13 @@ fn main() {
     init();
     wait_for_keypress();
 
+    // TODO: ugly hack for now...should be done with VIA chip output (I think)
+    // Remap ROM so RAM is available at 0x0
+    memory::remap_rom();
+    info!("ROM remapped - RAM now available at 0x0");
+
+    // TODO: we may need interrupts and SCC chip implementation
+
     // Initialize video
     let (video, event_loop) = MacVideo::new();
     
@@ -76,7 +83,7 @@ fn main() {
     // Run the video event loop, which calls the CPU execution step
     video.run(event_loop, || {
         let _ = step(CYCLES_PER_BATCH);
-        display_registers();
+        //display_registers();
         //wait_for_keypress();
     });
 }
