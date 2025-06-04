@@ -4,6 +4,13 @@ use crate::via::{VIA};
 use std::io;
 use std::io::Write;
 use crate::cpu::{get_pc, disassemble_instruction};
+use crate::iwm::Iwm;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+lazy_static! {
+    static ref IWM_INSTANCE: Mutex<Iwm> = Mutex::new(Iwm::new());
+}
 
 // TODO: mac plus rom maps over our VIDEO_BASE
 pub const RAM_SIZE: usize = 0x1000000;
@@ -50,6 +57,8 @@ pub fn read_u8(addr: u32) -> u8 {
     if (addr & 0xFFFFFF) >= 0xDFE1FF && (addr & 0xFFFFFF) < (0xDFE1FF + 0x2000) {
         log::warn!("IWM hardware read at 0x{:X}", addr);
         wait_for_keypress_hw("IWM hardware read", addr);
+        let iwm = IWM_INSTANCE.lock().unwrap();
+        return iwm.read(addr);
     }
     // SCC_RD: ((addr & 0xF00000) == 0x900000)
     if (addr & 0xF00000) == 0x900000 {
@@ -92,6 +101,9 @@ pub fn write_u8(addr: u32, value: u8) {
     if (addr & 0xFFFFFF) >= 0xDFE1FF && (addr & 0xFFFFFF) < (0xDFE1FF + 0x2000) {
         log::warn!("IWM hardware write at 0x{:X} = 0x{:X}", addr, value);
         wait_for_keypress_hw("IWM hardware write", addr);
+        let mut iwm = IWM_INSTANCE.lock().unwrap();
+        iwm.write(addr, value);
+        return;
     }
     // SCC_RD: ((addr & 0xF00000) == 0x900000)
     if (addr & 0xF00000) == 0x900000 {

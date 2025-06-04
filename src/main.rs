@@ -2,6 +2,7 @@ mod cpu;
 mod memory;
 mod video;
 mod via;
+mod iwm;
 use via::{Via, ViaCallbacks, set_via};
 
 use cpu::{init, step, get_pc, display_registers};
