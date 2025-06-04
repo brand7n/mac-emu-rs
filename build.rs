@@ -60,17 +60,33 @@ fn main() {
         panic!("Failed to run m68kmake");
     }
 
+    // Patch m68kconf.h to enable instruction hook
+    println!("cargo:warning=Patching m68kconf.h...");
+    let conf_path = musashi_dir.join("m68kconf.h");
+    let contents = fs::read_to_string(&conf_path).unwrap();
+    let new_contents = contents.lines()
+        .map(|line| {
+            if line.contains("M68K_INSTRUCTION_HOOK") {
+                "#define M68K_INSTRUCTION_HOOK OPT_ON"
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&conf_path, new_contents).unwrap();
+
     // Build Musashi
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .files([
             musashi_dir.join("softfloat/softfloat.c"),
             musashi_dir.join("m68kcpu.c"),
+            musashi_dir.join("m68kdasm.c"),
             musashi_dir.join("m68kops.c"),
         ])
         .include(&musashi_dir)
         .include(musashi_dir.join("softfloat"))
-        .flag_if_supported("-Wno-unused-function")
-        .define("OPTIMIZE_FOR_SIZE", None)
         .define("M68K_EMULATE_FPU", Some("0"))
         .compile("musashi");
 
@@ -81,9 +97,6 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
-    // bindings
-    //     .write_to_file(musashi_dir.join("bindings.rs").to_str().expect("Invalid path"))
-    //     .expect("Couldn't write bindings!");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
